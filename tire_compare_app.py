@@ -4,9 +4,11 @@
 """
 
 import streamlit as st
+import base64, gzip
 import math, re, itertools
 from pathlib import Path
 from itertools import combinations
+from io import StringIO
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -31,9 +33,11 @@ CONTAINER_SPECS = {
 }
 APP_DIR = Path(__file__).resolve().parent
 LOAD_TABLE_CANDIDATES = [
+    APP_DIR / "capacity_table.csv",
     APP_DIR / "규격별 평치(일반,벌집) 적재 개수.xlsx",
     Path.home() / "Documents" / "KakaoTalk Downloads" / "규격별 평치(일반,벌집) 적재 개수.xlsx",
 ]
+EMBEDDED_CAPACITY_TABLE_GZ_B64 = "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"
 
 # ══════════════════════════════════════════════════════
 # 1. 파싱
@@ -48,23 +52,40 @@ def parse_tire_size(s):
 
 @st.cache_data(show_spinner=False)
 def load_capacity_table():
+    df = None
+    source = None
     for path in LOAD_TABLE_CANDIDATES:
         if path.exists():
-            df = pd.read_excel(path)
-            df = df.rename(columns=lambda c: str(c).strip())
-            required = ["타이어규격", "일반평치", "벌집평치"]
-            missing = set(required) - set(df.columns)
-            if missing:
-                raise ValueError(f"{path.name}에 필요한 컬럼이 없습니다: {', '.join(sorted(missing))}")
-            df = df[required].copy()
-            df["타이어규격"] = df["타이어규격"].astype(str).str.strip().str.upper()
-            df["일반평치"] = pd.to_numeric(df["일반평치"], errors="coerce")
-            df["벌집평치"] = pd.to_numeric(df["벌집평치"], errors="coerce")
-            df = df.dropna(subset=["타이어규격", "일반평치", "벌집평치"])
-            df["일반평치"] = df["일반평치"].astype(int)
-            df["벌집평치"] = df["벌집평치"].astype(int)
-            return df.sort_values("타이어규격").reset_index(drop=True), str(path)
-    return pd.DataFrame(columns=["타이어규격", "일반평치", "벌집평치"]), None
+            if path.suffix.lower() == ".csv":
+                df = pd.read_csv(path)
+            else:
+                df = pd.read_excel(path)
+            source = str(path)
+            break
+
+    if df is None:
+        csv_text = gzip.decompress(base64.b64decode(EMBEDDED_CAPACITY_TABLE_GZ_B64)).decode("utf-8")
+        df = pd.read_csv(StringIO(csv_text))
+        source = "내장 기준표"
+
+    df = df.rename(columns=lambda c: str(c).strip())
+    df = df.rename(columns={
+        "tire_size": "타이어규격",
+        "flat_capacity": "일반평치",
+        "honeycomb_capacity": "벌집평치",
+    })
+    required = ["타이어규격", "일반평치", "벌집평치"]
+    missing = set(required) - set(df.columns)
+    if missing:
+        raise ValueError(f"{source}에 필요한 컬럼이 없습니다: {', '.join(sorted(missing))}")
+    df = df[required].copy()
+    df["타이어규격"] = df["타이어규격"].astype(str).str.strip().str.upper()
+    df["일반평치"] = pd.to_numeric(df["일반평치"], errors="coerce")
+    df["벌집평치"] = pd.to_numeric(df["벌집평치"], errors="coerce")
+    df = df.dropna(subset=["타이어규격", "일반평치", "벌집평치"])
+    df["일반평치"] = df["일반평치"].astype(int)
+    df["벌집평치"] = df["벌집평치"].astype(int)
+    return df.sort_values("타이어규격").reset_index(drop=True), source
 
 # ══════════════════════════════════════════════════════
 # 2. 적재 계산
